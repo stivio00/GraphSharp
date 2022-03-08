@@ -1,0 +1,147 @@
+#!csharp
+
+#r "nuget: TextCopy"
+
+#!csharp
+
+using System;
+using System.IO;
+using System.Collections.Generic;
+using TextCopy;
+
+#!csharp
+
+class AdjListStorage : Dictionary<uint, List<uint>> {
+ 
+    public static AdjListStorage Random(int nodes, float density = .5f){
+        AdjListStorage storage = new AdjListStorage();
+        List<uint> nodeIds = Enumerable.Range(0, nodes - 1).Select(Convert.ToUInt32).ToList();
+        Random random = new Random();
+
+        foreach(var nodeId in nodeIds) {
+            var edges = nodeIds.OrderBy(x => random.Next()).Take((int)(nodes*density)).ToList();
+            storage.Add(nodeId, edges);
+        }
+        return storage;
+    }
+
+    public int[,] ToAdjMatrix(){
+        int[,] matrix = new int[Count, Count];
+
+        int i = 0;
+        foreach(uint nodeIdSource in Keys){
+            int j = 0;
+            foreach(uint nodeIdTarget in Keys){
+                matrix[i, j] = this[nodeIdSource].Contains(nodeIdTarget) ? 1 : 0;
+                j++;
+            }
+            i++;
+        }
+        return matrix;
+    }
+}
+
+class NodeIO {
+    private const uint MAGICKNUMBER = 0x70617267; //GRAP
+    public static Dictionary<uint, List<uint>> ReadFile(string path){
+        using var stream = File.Open(path, FileMode.Open);
+        byte[] block = new byte[4];
+        stream.Read(block);
+        uint header = BitConverter.ToUInt32(block);
+        if (header != MAGICKNUMBER ) throw new FormatException();
+
+        stream.Read(block);
+        uint nodeCount = BitConverter.ToUInt32(block);
+
+        Dictionary<uint, List<uint>> adjStorage = new();
+        for(int node = 0; node < nodeCount; node++) {
+            stream.Read(block);
+            uint nodeId = BitConverter.ToUInt32(block);
+            List<uint> adjList = new();
+            stream.Read(block);
+            uint edgesCount = BitConverter.ToUInt32(block);
+            for(int edge = 0; edge < edgesCount; edge++) {
+                stream.Read(block);
+                uint adjNodeId = BitConverter.ToUInt32(block);
+                adjList.Add(adjNodeId);
+            }
+            adjStorage.Add(nodeId, adjList);
+        }
+        return adjStorage;
+    }
+
+    public static void WriteFile(Dictionary<uint,List<uint>> adjStorage, string path){
+        using var stream = File.Open(path, FileMode.Create);
+        stream.Write(BitConverter.GetBytes(MAGICKNUMBER));
+        stream.Write(BitConverter.GetBytes(adjStorage.Count()));
+        foreach (var kvp in adjStorage) {
+            stream.Write(BitConverter.GetBytes(kvp.Key));
+            stream.Write(BitConverter.GetBytes(kvp.Value.Count()));
+            foreach ( var value in kvp.Value){
+                stream.Write(BitConverter.GetBytes(value));
+            }
+        }
+    }
+}
+
+static class ExportUtil {
+    public static string ToLatex(int[,] matrix){
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine(@"$$\begin{bmatrix} ");
+        for (int x = 0; x < matrix.GetLength(0); x += 1) {
+            for (int y = 0; y < matrix.GetLength(1); y += 1) {
+                sb.Append(matrix[x,y]);
+                if (y != matrix.GetLength(1)) sb.Append(@"&");
+            }
+            if (x != matrix.GetLength(0)) sb.Append(@"\\");
+        }
+        sb.AppendLine(@"\end{bmatrix}$$");
+        return sb.ToString();
+    }
+
+    public static string ToMarkdownTable(AdjListStorage storage){
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine($"|NodeId|AdjList|\n|-|-|");
+        foreach (var kvp in storage) {
+            sb.AppendLine($"|{kvp.Key}|[{string.Join(",",kvp.Value)}]|");
+        }
+        return sb.ToString();
+    }
+    public static string ToMermaid(AdjListStorage storage, bool wrapMarkdown=true){
+        StringBuilder sb = new StringBuilder();
+        if (wrapMarkdown) sb.AppendLine("```Mermaid");
+        sb.AppendLine("graph");
+        foreach(var kvp in storage){
+            foreach(var edge in kvp.Value){
+                sb.AppendLine($"\t{kvp.Key} --> {edge}");
+            }
+        }
+        if (wrapMarkdown) sb.AppendLine("```");
+        return sb.ToString();
+    }
+
+    public static string MarkdownReport(AdjListStorage storage){
+        return $"# Graph\nNodes: {storage.Count()}\n"+
+        "## Graph\n"+
+        ToMermaid(storage) +
+        "## AdjMat\n"+
+        ToLatex(storage.ToAdjMatrix())+
+        "## AdjList\n"+
+        ToMarkdownTable(storage);
+    }
+}
+
+///<sumary> Map graph <c>uint</c> id topology to external source</summary>
+record IndexMap(uint NodeId, string ExternalId);
+
+#!csharp
+
+var t1 = AdjListStorage.Random(4,.5f);
+
+TextCopy.ClipboardService.SetText(
+    ExportUtil.MarkdownReport(t1)
+);
+
+#!csharp
+
+NodeIO.WriteFile(t1, "out.grap")
