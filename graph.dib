@@ -159,6 +159,72 @@ static class GraphUtil{
         }
         return graphDiff;
     }
+
+    public static AdjListStorage Merge(AdjListStorage g1, AdjListStorage g2){
+        AdjListStorage graph = new();
+
+        foreach(var kvp in g1){
+            graph.Add(kvp.Key, kvp.Value.ToList());
+        }
+
+        foreach(var kvp in g2){
+            if(g1.ContainsKey(kvp.Key))
+                graph[kvp.Key].AddRange(g2[kvp.Key].Except(g1[kvp.Key]).ToList());
+            else
+                graph.Add(kvp.Key, kvp.Value.ToList());
+
+        }
+        return graph;
+    }
+}
+
+class GraphDiffUtil {
+    public static string ToMermaid(AdjListStorage gOld,AdjListStorage gNew, bool wrapMarkdown = true){
+        StringBuilder sb = new StringBuilder();
+        GraphDiff diff = GraphUtil.Difference(gOld, gNew);
+        AdjListStorage merged = GraphUtil.Merge(gOld, gNew);
+        if (wrapMarkdown) sb.AppendLine("```Mermaid");
+        sb.AppendLine("graph");
+        int linkCount = 0;
+        foreach(var kvp in merged) {
+            foreach(var adjNode in kvp.Value){
+                if(diff.Status.ContainsKey(kvp.Key))
+                {
+                    if (diff.Status[kvp.Key].CreatedEdges.Contains(adjNode)){
+                        sb.AppendLine($"\t{kvp.Key} ==> {adjNode}");
+                        sb.AppendLine($"\tlinkStyle {linkCount} stroke:#afa");
+                    }
+                    else if (diff.Status[kvp.Key].DeletedEdges.Contains(adjNode)){
+                        sb.AppendLine($"\t{kvp.Key} -.-> {adjNode}");
+                        sb.AppendLine($"\tlinkStyle {linkCount} stroke:#faa");
+                    } else {
+                        sb.AppendLine($"\t{kvp.Key} --> {adjNode}");
+                    }
+                }
+                else
+                {
+                    if(diff.CreatedNodes.Contains(kvp.Key)){
+                        sb.AppendLine($"\t{kvp.Key} --> {adjNode}");
+                        sb.AppendLine($"\tlinkStyle {linkCount} stroke:#afa");
+                    }else{
+                        sb.AppendLine($"\t{kvp.Key} --> {adjNode}");
+                        sb.AppendLine($"\tlinkStyle {linkCount} stroke:#faa");
+                    }
+                    
+                }
+                linkCount++;
+            }
+        }
+        foreach(uint nodeId in diff.DeletedNodes){
+            sb.AppendLine($"\tstyle {nodeId} fill:faa");
+        }
+        foreach(uint nodeId in diff.CreatedNodes){
+            sb.AppendLine($"\tstyle {nodeId} fill:#afa");
+        }
+
+        if (wrapMarkdown) sb.AppendLine("```");
+        return sb.ToString();
+    }
 }
 
 ///<sumary> Map graph <c>uint</c> id topology to external source</summary>
@@ -175,7 +241,7 @@ NodeIO.WriteFile(t1, "out.grap")
 
 #!csharp
 
-var t2 = AdjListStorage.Random(5,.6f);
+var t2 = AdjListStorage.Random(5,.5f);
 t2
 
 #!csharp
@@ -189,6 +255,8 @@ diff
 
 #!csharp
 
+// Generate report
+
 TextCopy.ClipboardService.SetText(
     "# Graph 1\n" +
     ExportUtil.MarkdownReport(t1) +
@@ -197,5 +265,7 @@ TextCopy.ClipboardService.SetText(
     "# Diff\n"+
     "```JSON\n"+
     System.Text.Json.JsonSerializer.Serialize(diff, new JsonSerializerOptions{WriteIndented=true})+
-    "```"
+    "\n```\n"+
+    "## Diff Graph\n"+
+    GraphDiffUtil.ToMermaid(t1,t2)
 );
