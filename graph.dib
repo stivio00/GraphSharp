@@ -7,6 +7,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Text.Json;
 using TextCopy;
 
 #!csharp
@@ -131,17 +132,70 @@ static class ExportUtil {
     }
 }
 
+class GraphDiff {
+    public uint[] CreatedNodes {get;set;}
+    public uint[] DeletedNodes {get;set;}
+    public Dictionary<uint, EdgeDiff> Status {get;set;}
+}
+
+class EdgeDiff {
+    public uint[] CreatedEdges {get;set;}
+    public uint[] DeletedEdges {get;set;}
+}
+
+static class GraphUtil{
+    public static GraphDiff Difference(AdjListStorage graphOld, AdjListStorage graphNew){
+        GraphDiff graphDiff = new();
+        graphDiff.CreatedNodes = graphNew.Keys.Except(graphOld.Keys).ToArray();
+        graphDiff.DeletedNodes = graphOld.Keys.Except(graphNew.Keys).ToArray();
+        var commonNodes = graphOld.Keys.Intersect(graphNew.Keys);
+        graphDiff.Status = new();
+        foreach (uint nodeId in commonNodes) {
+            EdgeDiff edgeDiff = new () {
+                CreatedEdges = graphNew[nodeId].Except(graphOld[nodeId]).ToArray(),
+                DeletedEdges = graphOld[nodeId].Except(graphNew[nodeId]).ToArray()
+            };
+            graphDiff.Status.Add(nodeId, edgeDiff);
+        }
+        return graphDiff;
+    }
+}
+
 ///<sumary> Map graph <c>uint</c> id topology to external source</summary>
 record IndexMap(uint NodeId, string ExternalId);
 
 #!csharp
 
 var t1 = AdjListStorage.Random(4,.5f);
-
-TextCopy.ClipboardService.SetText(
-    ExportUtil.MarkdownReport(t1)
-);
+t1
 
 #!csharp
 
 NodeIO.WriteFile(t1, "out.grap")
+
+#!csharp
+
+var t2 = AdjListStorage.Random(5,.6f);
+t2
+
+#!csharp
+
+t1
+
+#!csharp
+
+var diff = GraphUtil.Difference(t1,t2);
+diff
+
+#!csharp
+
+TextCopy.ClipboardService.SetText(
+    "# Graph 1\n" +
+    ExportUtil.MarkdownReport(t1) +
+    "# Graph 2\n" +
+    ExportUtil.MarkdownReport(t2) +
+    "# Diff\n"+
+    "```JSON\n"+
+    System.Text.Json.JsonSerializer.Serialize(diff, new JsonSerializerOptions{WriteIndented=true})+
+    "```"
+);
