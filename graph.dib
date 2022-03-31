@@ -40,6 +40,14 @@ class AdjListStorage : Dictionary<uint, List<uint>> {
         }
         return matrix;
     }
+
+    public AdjListStorage Copy(){
+        AdjListStorage copy = new();
+        foreach (var kvp in this) {
+            copy.Add(kvp.Key, kvp.Value.ToList());
+        }
+        return copy;
+    }
 }
 
 class NodeIO {
@@ -83,6 +91,7 @@ class NodeIO {
             }
         }
     }
+
 }
 
 static class ExportUtil {
@@ -176,6 +185,18 @@ static class GraphUtil{
         }
         return graph;
     }
+
+    public static List<uint> TopologicalSort(AdjListStorage graph){
+        var sortedList = new List<uint>();
+        Stack<uint> visited = new Stack<uint>();
+        
+        sortedList.AddRange(graph.Where(kvp => !kvp.Value.Any()).Select(kvp => kvp.Key));
+
+
+        return sortedList;
+    }
+
+
 }
 
 class GraphDiffUtil {
@@ -227,26 +248,18 @@ class GraphDiffUtil {
     }
 }
 
+
+
+
 ///<sumary> Map graph <c>uint</c> id topology to external source</summary>
 record IndexMap(uint NodeId, string ExternalId);
 
 #!csharp
 
 var t1 = AdjListStorage.Random(4,.5f);
-t1
-
-#!csharp
-
-NodeIO.WriteFile(t1, "out.grap")
-
-#!csharp
-
 var t2 = AdjListStorage.Random(5,.5f);
-t2
-
-#!csharp
-
-t1
+t1.Display();
+t2.Display();
 
 #!csharp
 
@@ -269,3 +282,31 @@ TextCopy.ClipboardService.SetText(
     "## Diff Graph\n"+
     GraphDiffUtil.ToMermaid(t1,t2)
 );
+
+#!csharp
+
+var graph = new AdjListStorage();
+
+#!csharp
+
+graph.Add(1, new(){2,3});
+graph.Add(2, new(){4,3});
+graph.Add(3, new(){4});
+graph.Add(4, new(){5});
+graph.Add(5, new(){6,7});
+graph.Add(6, new(){});
+graph.Add(7, new(){});
+
+#!csharp
+
+ExportUtil.MarkdownReport(graph)
+
+#!csharp
+
+List<uint> TopologicalSort(AdjListStorage graph) 
+{
+    List<uint> sorted = new();
+    
+
+    return sorted;
+}
